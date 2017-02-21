@@ -1,7 +1,8 @@
-//Acceleromet code by mojavaton (www.mojavaton.org)
 
+
+//Acceleromet code by mojavaton (www.mojavaton.org)
 #include <Wire.h>
-#include "RTClib.h"
+//#include "RTClib.h"
 #include <LowPower.h>
 #include <SPI.h>
 #include <SD.h>
@@ -144,7 +145,7 @@ void loop(){
 
     /////////////////////////// SLEEP STATE //////////////////////////////////////////////
     // Sleep in Low Power Mode Unitl Wake Up RX
-    LowPower.powerDown(SLEEP_8S,ADC_OFF, BOD_OFF);
+    //LowPower.powerDown(SLEEP_8S,ADC_OFF, BOD_OFF);
 
     /////////////////////////// COLLECTION STATE /////////////////////////////////////////
     // Collect and Print RTC Time
@@ -178,7 +179,7 @@ void loop(){
     String dataString = "";
     //dataString += (now.year());
     dataString += "A: ";
-    dataString += (accel);
+    //dataString += (accel);
     
      // read three sensors and append to the string:
   /*for (int analogPin = 0; analogPin < 3; analogPin++) {
