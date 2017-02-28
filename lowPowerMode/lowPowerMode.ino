@@ -3,21 +3,30 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SparkFunLSM9DS1.h>
-
+#include <Adafruit_GPS.h>
+#include <SoftwareSerial.h>
 
 // VARIABLE DEFINITIONS
 //
 const int chipSelect = 10;
+String dataString;
+boolean accelChange = false;
+float accelComp;
+int sleepCount;
 LSM9DS1 motion;
 #define LSM9DS1_M	0x1E // Would be 0x1C if SDO_M is LOW
 #define LSM9DS1_AG	0x6B // Would be 0x6A if SDO_AG is LOW
 #define DECLINATION -5.70 // Declination (degrees) in Atlanta, Ga.
 
 
+  
+
+  
+
 // SETUP LOOP
 //
 void setup() {
-  
+
   //pinMode(2, OUTPUT); // Previously used for indicator LED light.
   Wire.begin();        // join i2c bus (address optional for master)
   Serial.begin(115200);  // Initialize serial output for development purposes.
@@ -51,19 +60,37 @@ void setup() {
     while (1)
       ;
   }
+  accelAvg();
+}
+
+void accelAvg() {
+  sleepCount = 5;
+  float x = 0;
+  float y = 0;
+  float z = 0;
+  while( sleepCount > 0) {
+  if ( !motion.accelAvailable() )
+    {
+      // To read from the accelerometer, first call the
+      // readAccel() function. When it exits, it'll update the
+      // ax, ay, and az variables with the most current data.
+      delay(200);
+      Serial.println("Waiting for accelerometer reading.");
+      Serial.println();
+    } else {
+      motion.readAccel();
+    }
+    x += motion.calcAccel(motion.ax);
+    y += motion.calcAccel(motion.ay);
+    z += motion.calcAccel(motion.az);
+    sleepCount -= sleepCount;
+  }
+  accelComp = (x + y + z)/3; 
 }
 
 
-// MAIN LOOP
-//
-void loop(){
-  /////////////////////////// SLEEP STATE //////////////////////////////////////////////
-  // Sleep in Low Power Mode Unitl Wake Up RX
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
-
-  /////////////////////////// COLLECTION STATE /////////////////////////////////////////
-  //
-  //Accelerometer Reading
+void checkAccel(char* axbuff, char* aybuff, char* azbuff) {
+ //Accelerometer Reading
     if ( !motion.accelAvailable() )
     {
       // To read from the accelerometer, first call the
@@ -76,24 +103,28 @@ void loop(){
       motion.readAccel();
     }
     
+    dtostrf(motion.calcAccel(motion.ax),5,2,axbuff);
+    dtostrf(motion.calcAccel(motion.az),5,2,azbuff);
+    dtostrf(motion.calcAccel(motion.ay),5,2,aybuff);
+    if ( ((motion.calcAccel(motion.ax) + motion.calcAccel(motion.ay) + motion.calcAccel(motion.az)) < (accelComp - .2)) || ((motion.calcAccel(motion.ax) + motion.calcAccel(motion.ay) + motion.calcAccel(motion.az)) > (accelComp + .2)) ){
+      accelChange = true;
+      Serial.println("Motion detected, exiting sleep loop.");
+    }
+  
+}
 
-
-    // Collect Data and Save On SD:
-    // Create Data String of all data to be saved/printed. 
-    int Ax = (motion.calcAccel(motion.ax),2);
-    int Ay = (motion.calcAccel(motion.ay), 2);
-    int Az = (motion.calcAccel(motion.az), 2);
-    String dataString = "";
+void createDataString(char* axbuff, char* aybuff, char* azbuff) {
+  // Create Data String of all data to be saved/printed.
     dataString += "Ax: ";
-    dataString += Ax;
+    dataString += axbuff;
     dataString += "  Ay: ";
-    dataString += Ay;
+    dataString += aybuff;
     dataString += "  Az: ";
-    dataString += Az;
-    
-    Serial.println(dataString);
-    Serial.println();
-    File dataFile = SD.open("datalog.txt", FILE_WRITE);
+    dataString += azbuff;
+}  
+
+void saveData() { //Save dataString to SD card datalog.txt file.
+  File dataFile = SD.open("datalog.txt", FILE_WRITE);
     // if the file is available, write to it:
     if (dataFile) {
       dataFile.println(dataString);
@@ -105,7 +136,42 @@ void loop(){
   else {
     Serial.println("error opening datalog.txt");
   }
+}
+
+// MAIN LOOP
+//s
+void loop(){
+  /////////////////////////// SLEEP STATE //////////////////////////////////////////////
+  // Sleep in Low Power Mode Unitl Wake Up RX
+  Serial.println(accelComp);
+  sleepCount = 2;
+  char axbuff[16];
+  char azbuff[16];
+  char aybuff[16];
+  accelChange = false;
+  while( (sleepCount > 0) && !accelChange) {
+    LowPower.powerDown(SLEEP_2S, ADC_OFF, BOD_OFF);
+    checkAccel(axbuff, aybuff, azbuff);
+    Serial.println(sleepCount);
+    sleepCount -= 1;
+  }
+
+  /////////////////////////// COLLECTION STATE /////////////////////////////////////////
+  //
+  // Collect Data and Save On SD:
+  dataString = "";
+  createDataString(axbuff, aybuff, azbuff);
+  Serial.println(dataString);
+  Serial.println();
+  saveData();
+    
+    
+    
+    
+    
   
   
   //////////////////////////////////// TRANSMIT STATE ///////////////////////////////////////////////// 
 }
+
+
