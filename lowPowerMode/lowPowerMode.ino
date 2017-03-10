@@ -4,12 +4,11 @@
 #include <SD.h>
 #include <SparkFunLSM9DS1.h>
 #include <Adafruit_GPS.h>
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 
-// VARIABLE DEFINITIONS
+/////////////////// VARIABLE DEFINITIONS ///////////////////
 //
 const int chipSelect = 10;
-String dataString;
 boolean accelChange = false;
 float accelComp;
 int sleepCount;
@@ -17,24 +16,32 @@ LSM9DS1 motion;
 #define LSM9DS1_M	0x1E // Would be 0x1C if SDO_M is LOW
 #define LSM9DS1_AG	0x6B // Would be 0x6A if SDO_AG is LOW
 #define DECLINATION -5.70 // Declination (degrees) in Atlanta, Ga.
-
-
-  
+#define GPSECHO  false
 
   
 
-// SETUP LOOP
+  
+
+/////////////////// SETUP LOOP ///////////////////////
 //
 void setup() {
-
-  //pinMode(2, OUTPUT); // Previously used for indicator LED light.
+  pinMode(10, OUTPUT); //SD Card Chip Select
+  pinMode(9, OUTPUT);  //SD Card power toggle
+  pinMode(4, OUTPUT);  //GPS/RTC power toggle
+  pinMode(14, OUTPUT);  //ACCEL power toggle
+  digitalWrite(9, HIGH); //SD On
+  //digitalWrite(4, HIGH); //GPS On
+  digitalWrite(14, HIGH); //Accel On
+  
   Wire.begin();        // join i2c bus (address optional for master)
   Serial.begin(115200);  // Initialize serial output for development purposes.
-  while (!Serial);
-  delay(200);
+  while (!Serial){
+     delay(200); 
+  }
   Serial.println("-- DISPLAY ONLINE --");
-  
   Serial.print("Initializing SD card...");
+  
+  
   // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
     Serial.println("Card failed, or not present");
@@ -49,6 +56,7 @@ void setup() {
   // The above lines will only take effect AFTER calling
   // motion.begin(), which verifies communication with the IMU
   // and turns it on.
+  //Serial.println("Initializing IMU.");
   if (!motion.begin())
   {
     Serial.println("Failed to communicate with LSM9DS1.");
@@ -60,9 +68,12 @@ void setup() {
     while (1)
       ;
   }
+  //Serial.println("IMU Initialized.");
   accelAvg();
 }
 
+//////////////// FUNCTION SETUP //////////////////////
+//
 void accelAvg() {
   sleepCount = 5;
   float x = 0;
@@ -83,22 +94,29 @@ void accelAvg() {
     x += motion.calcAccel(motion.ax);
     y += motion.calcAccel(motion.ay);
     z += motion.calcAccel(motion.az);
-    sleepCount -= sleepCount;
+    sleepCount = sleepCount - 1;
+    /*Serial.print("Initializing accel value.");
+    Serial.print((x+y+z), 2);
+    Serial.println("");
+    Serial.println(sleepCount);*/
+    delay(1000);
   }
-  accelComp = (x + y + z)/3; 
+  accelComp = (x + y + z)/5; 
 }
 
 
 void checkAccel(char* axbuff, char* aybuff, char* azbuff) {
  //Accelerometer Reading
+    //digitalWrite(14, HIGH); //Accel On
+    //delay(400);
     if ( !motion.accelAvailable() )
     {
       // To read from the accelerometer, first call the
       // readAccel() function. When it exits, it'll update the
       // ax, ay, and az variables with the most current data.
-      delay(200);
       Serial.println("Waiting for accelerometer reading.");
       Serial.println();
+      delay(100);
     } else {
       motion.readAccel();
     }
@@ -106,65 +124,66 @@ void checkAccel(char* axbuff, char* aybuff, char* azbuff) {
     dtostrf(motion.calcAccel(motion.ax),5,2,axbuff);
     dtostrf(motion.calcAccel(motion.az),5,2,azbuff);
     dtostrf(motion.calcAccel(motion.ay),5,2,aybuff);
+    
     if ( ((motion.calcAccel(motion.ax) + motion.calcAccel(motion.ay) + motion.calcAccel(motion.az)) < (accelComp - .2)) || ((motion.calcAccel(motion.ax) + motion.calcAccel(motion.ay) + motion.calcAccel(motion.az)) > (accelComp + .2)) ){
       accelChange = true;
       Serial.println("Motion detected, exiting sleep loop.");
     }
+    //digitalWrite(14, LOW); //Accel Off
   
 }
 
-void createDataString(char* axbuff, char* aybuff, char* azbuff) {
-  // Create Data String of all data to be saved/printed.
-    dataString += "Ax: ";
-    dataString += axbuff;
-    dataString += "  Ay: ";
-    dataString += aybuff;
-    dataString += "  Az: ";
-    dataString += azbuff;
-}  
-
-void saveData() { //Save dataString to SD card datalog.txt file.
-  File dataFile = SD.open("datalog.txt", FILE_WRITE);
-    // if the file is available, write to it:
-    if (dataFile) {
-      dataFile.println(dataString);
-      dataFile.close();
-      // print to the serial port too:
-      Serial.println(dataString);
-  }
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening datalog.txt");
-  }
-}
-
-// MAIN LOOP
-//s
+//////////////////////// MAIN LOOP/////////////////////////
+//
 void loop(){
+  String dataString;
   /////////////////////////// SLEEP STATE //////////////////////////////////////////////
   // Sleep in Low Power Mode Unitl Wake Up RX
-  Serial.println(accelComp);
-  sleepCount = 2;
-  char axbuff[16];
-  char azbuff[16];
-  char aybuff[16];
+  //digitalWrite(9, LOW); //SD Off
+  //digitalWrite(4, LOW); //GPS Off
+  //digitalWrite(14, LOW); //Accel Off
+  sleepCount = 4;
+  char axbuff[8];
+  char azbuff[8];
+  char aybuff[8];
   accelChange = false;
-  while( (sleepCount > 0) && !accelChange) {
-    LowPower.powerDown(SLEEP_2S, ADC_OFF, BOD_OFF);
+  //Serial.println("Devices off.");
+  //Serial.println();
+  while( (sleepCount > 0) && (!accelChange)) {
+    LowPower.powerDown(SLEEP_4S, ADC_OFF, BOD_OFF);
+    Serial.print(accelComp);
+    Serial.print("   ");
+    Serial.println();
     checkAccel(axbuff, aybuff, azbuff);
-    Serial.println(sleepCount);
+    //Serial.println(accelChange);
+    //Serial.println();
     sleepCount -= 1;
   }
 
   /////////////////////////// COLLECTION STATE /////////////////////////////////////////
   //
   // Collect Data and Save On SD:
+  //digitalWrite(9, HIGH); //SD On
+  //digitalWrite(4, HIGH); //GPS On
+  //digitalWrite(14, HIGH); //Accel On
   dataString = "";
-  createDataString(axbuff, aybuff, azbuff);
-  Serial.println(dataString);
-  Serial.println();
-  saveData();
-    
+  dataString += "Test line.";
+  dataString += "   Ax: ";
+  //dataString += axbuff;
+  
+  File dataFile = SD.open("test2.txt", FILE_WRITE);
+  // if the file is available, write to it:
+  
+  if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+    Serial.println("Write Successful.");
+  }  
+  // if the file isn't open, pop up an error:
+  else {
+    Serial.println("error opening datalog.txt");
+  }
     
     
     
